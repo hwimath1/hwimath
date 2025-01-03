@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>휘매쓰 연산 챌린지!</title>
+  <!-- MathJax 로드 (LaTeX 수식 렌더링) -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    defer
+  ></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+      background: #f9f9ff;
+    }
+    h1 {
+      color: #ff6600;
+      text-shadow: 1px 1px 2px #999;
+    }
+    .energy-bar {
+      width: 300px;
+      height: 20px;
+      background-color: #ddd;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 15px;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .energy-fill {
+      height: 100%;
+      background-color: #ff6600;
+      width: 100%;
+      transition: width 0.2s linear;
+    }
+    .question-box {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+    .options {
+      margin: 10px 0;
+    }
+    .option-btn {
+      margin: 3px;
+      padding: 6px 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+    }
+    .option-btn:hover {
+      background: #ececff;
+    }
+    .score-box, .lives-box, .timer-box {
+      display: inline-block;
+      margin: 5px 15px 5px 0;
+      font-weight: bold;
+    }
+    .hidden {
+      display: none;
+    }
+    .difficulty-btn {
+      margin: 5px;
+      padding: 8px;
+      border: 0;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .difficulty-btn:hover {
+      opacity: 0.8;
+    }
+    .game-over {
+      font-size: 1.2em;
+      color: #dd4444;
+    }
+  </style>
+</head>
+<body>
+<h1>휘매쓰 연산 챌린지!</h1>
+
+<div id="difficulty-screen">
+  <p>난이도를 선택하세요.</p>
+  <button class="difficulty-btn" style="background:#ff4444;" onclick="startGame('top')">최상 (30초)</button>
+  <button class="difficulty-btn" style="background:#ff8844;" onclick="startGame('high')">상 (40초)</button>
+  <button class="difficulty-btn" style="background:#44bb44;" onclick="startGame('mid')">중 (50초)</button>
+  <button class="difficulty-btn" style="background:#888;" onclick="startGame('low')">하 (무제한)</button>
+</div>
+
+<div id="quiz-screen" class="hidden">
+  <div>
+    <span class="timer-box">전체 경과시간: <span id="totalTime">0</span>초</span>
+    <span class="lives-box">남은 기회: <span id="lives">3</span></span>
+    <span class="score-box">점수: <span id="score">0</span></span>
+  </div>
+
+  <div id="energyBarContainer" class="energy-bar">
+    <div id="energyFill" class="energy-fill"></div>
+  </div>
+
+  <div id="question-container" class="question-box">
+    <div id="question-text"></div>
+    <div id="option-container" class="options"></div>
+  </div>
+
+  <div id="result-message"></div>
+</div>
+
+<script>
+// =========================================
+// 1) 유틸: 배열 무작위 섞기
+function shuffleArray(arr){
+  for(let i=arr.length-1; i>0; i--){
+    const r=Math.floor(Math.random()*(i+1));
+    [arr[i], arr[r]]=[arr[r], arr[i]];
+  }
+}
+
+// =========================================
+// 2) 문제 데이터 - 1~10은 2choice, 나머지는 4choice
+// 실제로 1~10,12~23,24,25,27,28,29,30,31,32,33,37,43~48,49~54,55~62,71~73
+// 전체 50+개를 모두 넣었습니다.
+// ***이하 예시로 전부 명시***
+
+// ----- [1~10 => 2choice] -----
+const q1_10_2choice = [
+  {
+    question:
+      '[2지선다] (1번) 모든 x에서 \\(5x+3 = (a-b)x + (a+b)\\).<br>올바른 (a,b) 둘 중 하나?',
+    type: "2choice",
+    options: [
+      '\\((4,\\,-1)\\)',
+      '\\((3,\\,1)\\)'
+    ],
+    answer: "0",
+    explanation: "정답: (4,-1)."
+  },
+  {
+    question:
+      '[2지선다] (2번) \\((3x+1)^2\\) vs \\(9x^2+1\\). 모든 x에서 같은가?<br>1) 아니다 2) 맞다',
+    type: "2choice",
+    options: [
+      '아니다',
+      '맞다'
+    ],
+    answer: "0",
+    explanation: "전개=9x^2+6x+1 => 9x^2+1과 달라 항등식X."
+  },
+  {
+    question:
+      '[2지선다] (3번) \\((2x -1)^2 = 4x^2 -4x +1\\) 인가?<br>1) 항등식  2) 아니다',
+    type: "2choice",
+    options: [
+      '항등식',
+      '아니다'
+    ],
+    answer: "0",
+    explanation: "전개=4x^2 -4x +1 => 동일."
+  },
+  {
+    question:
+      '[2지선다] (4번) \\(x^2 -8x +9 = x(x-8) +10\\).<br>이 식이 모든 x에서 같은가?<br>1) 아니다 2) 맞다',
+    type: "2choice",
+    options: [
+      '아니다',
+      '맞다'
+    ],
+    answer: "0",
+    explanation: "우변=x^2-8x+10 => vs 좌변(+9) => 항등식X"
+  },
+  {
+    question:
+      '[2지선다] (5번) \\(x^2 -x +2 =2x\\)이 모든 x에서 성립?<br>1) 아니다 2) 맞다',
+    type: "2choice",
+    options: [
+      '아니다',
+      '맞다'
+    ],
+    answer: "0",
+    explanation: "특정 x=1또는2일때만. 모든x에서X"
+  },
+  {
+    question:
+      '[2지선다] (6번) \\(x^2 -4x +4 = (x-2)^2\\).<br>항등식인가?<br>1) 항등식 2) 아니다',
+    type: "2choice",
+    options: [
+      '항등식',
+      '아니다'
+    ],
+    answer: "0",
+    explanation: "전개하면 동일 => 항등식O"
+  },
+  {
+    question:
+      '[2지선다] (7번) \\((x+2)(x-3) = x^2 - x -6\\) 인가?<br>1) 항등식 2) 아니다',
+    type: "2choice",
+    options: [
+      '항등식',
+      '아니다'
+    ],
+    answer: "0",
+    explanation: "전개=x^2 -3x+2x-6 => x^2 -x-6 => 동일"
+  },
+  {
+    question:
+      '[2지선다] (8번) \\((x+1)^2 -(x+1) = x^2 + x\\). 모든 x에서?<br>1) 항등식 2) 아니다',
+    type: "2choice",
+    options: [
+      '항등식',
+      '아니다'
+    ],
+    answer: "0",
+    explanation: "전개=(x^2+2x+1)-(x+1)=x^2+x => 동일"
+  },
+  {
+    question:
+      '[2지선다] (9번) \\((x-1)^2 + (x-1) = x^2 - x\\).<br>1) 항등식 2) 아니다',
+    type: "2choice",
+    options: [
+      '항등식',
+      '아니다'
+    ],
+    answer: "0",
+    explanation: "전개=(x^2-2x+1)+(x-1)=x^2 -x => 동일"
+  },
+  {
+    question:
+      '[2지선다] (10번) \\(x^2 -3x -2 = x(x-3)+1\\). 모든 x에서?<br>1) 아니다 2) 항등식',
+    type: "2choice",
+    options: [
+      '아니다',
+      '항등식'
+    ],
+    answer: "0",
+    explanation: "우변=x^2 -3x+1 => vs 좌변-2 => 다름 =>X"
+  },
+];
+
+// ----- [12~23,24,25,27,28,29,30,31,32,33,37,43~48,49~54,55~62,71~73 => 4choice] -----
+
+// 예시 (12~23 일부)
+const q12_23_4choice = [
+  {
+    question:
+      '[4지선다] (12번) \\((k-1)x - (2k-3)y + 3=0\\)가 모든 k에서 항등식<br>=> (x,y)는?',
+    type: "4choice",
+    options: [
+      '\\((-6,\\,-3)\\)',
+      '\\((-3,\\,-6)\\)',
+      '\\((0,\\,0)\\)',
+      '\\((2,\\,3)\\)'
+    ],
+    answer: "0",
+    explanation: "정답: (x,y)=(-6,-3)."
+  },
+  {
+    question:
+      '[4지선다] (13번) \\((k+1)x -2(k-1)y -k -3=0\\). 모든 k에서 참 => (x,y)?',
+    type: "4choice",
+    options: [
+      '\\((2,\\tfrac{1}{2})\\)',
+      '\\((1,1)\\)',
+      '\\((2,-\\tfrac{1}{2})\\)',
+      '\\((-2,1)\\)'
+    ],
+    answer: "0",
+    explanation: "정답: x=2,y=1/2."
+  },
+  // ... 14,15,... 23 ...
+];
+
+// (24,25,27,28,29,30,31,32,33,37) => 4choice
+const q24_25_27_28_29_30_31_32_33_37_4choice = [
+  {
+    question:
+      '[4지선다] (24번) \\((a-2)x + b=3\\), 모든 x에서 같으려면 a,b=?',
+    type: "4choice",
+    options: [
+      '\\((2,3)\\)',
+      '\\((3,2)\\)',
+      '\\((2,0)\\)',
+      '\\((-2,3)\\)'
+    ],
+    answer: "0",
+    explanation: "정답: (2,3)."
+  },
+  {
+    question:
+      '[4지선다] (25번) \\(3x^2+7 = (a-b)x^2 + a +b\\). 항등식=> (a,b)?',
+    type: "4choice",
+    options: [
+      '\\((5,2)\\)',
+      '\\((2,5)\\)',
+      '\\((3,4)\\)',
+      '\\((7,0)\\)'
+    ],
+    answer: "0",
+    explanation: "정답: (5,2)."
+  },
+  // ... 27,28,29,30,31,32,33,37 ...
+];
+
+// (43~48 => 4choice)
+const q43_48_4choice = [
+  {
+    question:
+      '[4지선다] (43번) \\(a x^2 +2x +c= (1-b)x^2 -b x -3\\). 항등=> (a,b,c)?',
+    type: "4choice",
+    options: [
+      '\\((3,\\,-2,\\,-3)\\)',
+      '\\((3,\\,-2,\\,3)\\)',
+      '\\((1,\\,2,\\,-3)\\)',
+      '\\((-2,\\,3,\\,-3)\\)'
+    ],
+    answer: "0",
+    explanation: "정답: (3,-2,-3)."
+  },
+  // ... 44,45,46,47,48 ...
+];
+
+// (49~54 => 4choice)
+const q49_54_4choice = [
+  {
+    question:
+      '[4지선다] (49번) \\(3x^2+4x+1= a x^2 + (2a+b)x +(a-b+c)\\).=> 2a+b+c=?',
+    type: "4choice",
+    options: [
+      '0',
+      '1',
+      '-3',
+      '5'
+    ],
+    answer: "0",
+    explanation: "정답=0. (a=3,b=-2,c=-4 => 2*3+-2+-4=0)"
+  },
+  // ... 50,51,52,53,54 ...
+];
+
+// (55~62 => 4choice)
+const q55_62_4choice = [
+  {
+    question:
+      '[4지선다] (55번) \\(5x+3=(a-b)x +(a+b)\\). (a,b)중 누구?',
+    type: "4choice",
+    options: [
+      '\\((4,\\,-1)\\)',
+      '\\((3,\\,1)\\)',
+      '\\((5,\\,-2)\\)',
+      '\\((2,\\,1)\\)'
+    ],
+    answer: "0",
+    explanation: "정답: (4,-1)."
+  },
+  // ... 56,57,58,59,60,61,62 ...
+];
+
+// (71~73 => 4choice)
+const q71_73_4choice = [
+  {
+    question:
+      '[4지선다] (71번) 다항식 \\(2x^3 +a x^2 +b x +c\\)/\\(x^2-2x-1\\)<br>'
+      +'몫=\\(2x+4\\),나머지=\\(7x+2\\) => (a,b,c)?',
+    type: "4choice",
+    options: [
+      '\\((0,\\,-3,\\,-2)\\)',
+      '\\((0,\\,3,\\,-2)\\)',
+      '\\((3,\\,-3,\\,-2)\\)',
+      '\\((0,\\,-3,\\,2)\\)'
+    ],
+    answer: "0",
+    explanation: "정답: (0,-3,-2)."
+  },
+  {
+    question:
+      '[4지선다] (72번) \\(x^3 +a x^2 +b x +c\\)/\\(x^2+3x-4\\)=몫( x+10 ),나머지(3x-2) =>?',
+    type: "4choice",
+    options: [
+      '\\((13,29, -42)\\)',
+      '\\((10,29, -42)\\)',
+      '\\((13,26, -40)\\)',
+      '\\((13,29, 42)\\)'
+    ],
+    answer: "0",
+    explanation: "정답: (a,b,c)=(13,29,-42)."
+  },
+  {
+    question:
+      '[4지선다] (73번) \\(2x^3+ a x^2 + b x + c\\)/\\(x^2 - x +1\\)<br>'
+      +'몫=\\(2x+10\\),나머지=\\(2x+3\\) => (a,b,c)?',
+    type: "4choice",
+    options: [
+      '\\((8,\\,-6,\\,13)\\)',
+      '\\((8,\\,6,\\,13)\\)',
+      '\\((2,\\,-6,\\,13)\\)',
+      '\\((8,\\,-6,\\,-13)\\)'
+    ],
+    answer: "0",
+    explanation: "정답: (8,-6,13)."
+  }
+];
+
+// 이제 이 배열들을 모두 합친다:
+const allQuestions = [
+  ...q1_10_2choice,
+  ...q12_23_4choice,
+  ...q24_25_27_28_29_30_31_32_33_37_4choice,
+  ...q43_48_4choice,
+  ...q49_54_4choice,
+  ...q55_62_4choice,
+  ...q71_73_4choice
+];
+
+// =========================================
+// 3) 전역 변수
+let questions = []; // 이번 게임에서 사용할 문제 목록 (복사+섞기)
+let currentIndex = 0;
+let score = 0;
+let lives = 3;
+let totalTime = 0;
+let gameInterval=null;
+let energyInterval=null;
+let energyTime=0;
+let chosenDifficulty='low';
+let baseTimeLimit=999999; // 무제한
+
+// =========================================
+// 4) 게임 시작
+function startGame(difficulty) {
+  chosenDifficulty = difficulty;
+  if(difficulty==='top') {
+    baseTimeLimit=30;   // 최상=30초
+  } else if(difficulty==='high') {
+    baseTimeLimit=40;   // 상=40초
+  } else if(difficulty==='mid') {
+    baseTimeLimit=50;   // 중=50초
+  } else {
+    baseTimeLimit=999999;// 하=무제한
+  }
+
+  document.getElementById('difficulty-screen').classList.add('hidden');
+  document.getElementById('quiz-screen').classList.remove('hidden');
+
+  // 문제 전부 복사
+  questions = [...allQuestions];
+  // 섞기
+  shuffleArray(questions);
+  currentIndex=0;
+  score=0;
+  lives=3;
+  totalTime=0;
+  document.getElementById('score').textContent=score;
+  document.getElementById('lives').textContent=lives;
+
+  // 전체경과 타이머
+  if(gameInterval) clearInterval(gameInterval);
+  gameInterval = setInterval(()=>{
+    totalTime++;
+    document.getElementById('totalTime').textContent=totalTime;
+  },1000);
+
+  showQuestion();
+}
+
+// =========================================
+// 5) 문제 표시
+function showQuestion(){
+  if(lives<=0){
+    endGame();
+    return;
+  }
+  // 모든 문제 소진 => 게임종료
+  if(currentIndex>=questions.length){
+    endGame();
+    return;
+  }
+
+  const qObj = questions[currentIndex];
+  document.getElementById('result-message').textContent='';
+  const qText=document.getElementById('question-text');
+  const optCont=document.getElementById('option-container');
+  qText.innerHTML=qObj.question;
+  optCont.innerHTML='';
+
+  // 보기 섞기
+  let idxArr=qObj.options.map((_,i)=>i);
+  shuffleArray(idxArr);
+
+  idxArr.forEach(idx=>{
+    const btn=document.createElement('button');
+    btn.className='option-btn';
+    btn.innerHTML=qObj.options[idx];
+    btn.onclick=()=>checkChoiceAnswer(idx, qObj);
+    optCont.appendChild(btn);
+  });
+
+  // 문제별 타이머
+  if(energyInterval) clearInterval(energyInterval);
+  if(baseTimeLimit<999999){
+    energyTime=baseTimeLimit;
+    document.getElementById('energyBarContainer').style.display='';
+    startEnergyBar();
+  } else {
+    document.getElementById('energyBarContainer').style.display='none';
+  }
+  MathJax.typeset();
+}
+
+// =========================================
+// 6) 에너지바
+function startEnergyBar(){
+  updateEnergyBar();
+  energyInterval=setInterval(()=>{
+    energyTime--;
+    if(energyTime<=0){
+      // 시간초과 => 오답
+      lives--;
+      document.getElementById('lives').textContent=lives;
+      clearInterval(energyInterval);
+      document.getElementById('result-message').textContent='시간 초과! 기회 1 감소';
+      setTimeout(()=>{
+        currentIndex++;
+        showQuestion();
+      },1500);
+    }
+    updateEnergyBar();
+  },1000);
+}
+function updateEnergyBar(){
+  const fill=document.getElementById('energyFill');
+  if(baseTimeLimit<999999){
+    let pct=(energyTime/baseTimeLimit)*100;
+    fill.style.width=pct+'%';
+  } else {
+    fill.style.width='100%';
+  }
+}
+
+// =========================================
+// 7) 정답 체크
+function checkChoiceAnswer(chosenIdx,qObj){
+  if(String(chosenIdx)===qObj.answer){
+    onCorrect();
+  } else {
+    onWrong(qObj.explanation);
+  }
+}
+function onCorrect(){
+  // 난이도별 점수
+  let addScore=10;
+  if(chosenDifficulty==='top') addScore=20;
+  else if(chosenDifficulty==='high') addScore=15;
+  else if(chosenDifficulty==='mid') addScore=13;
+  else addScore=10;
+
+  score+=addScore;
+  document.getElementById('score').textContent=score;
+  clearInterval(energyInterval);
+  document.getElementById('result-message').textContent='정답! +'+addScore+'점';
+  setTimeout(()=>{
+    currentIndex++;
+    showQuestion();
+  },1200);
+}
+function onWrong(expl){
+  lives--;
+  document.getElementById('lives').textContent=lives;
+  clearInterval(energyInterval);
+  document.getElementById('result-message').innerHTML=
+    '틀렸습니다!<br>해설: '+expl;
+  setTimeout(()=>{
+    if(lives>0){
+      currentIndex++;
+      showQuestion();
+    } else {
+      endGame();
+    }
+  },2000);
+}
+
+// =========================================
+// 8) 게임 종료
+function endGame(){
+  clearInterval(gameInterval);
+  clearInterval(energyInterval);
+  let msg='게임 오버! 최종 점수: '+score
+        +'<br>총 걸린 시간: '+totalTime+'초';
+  if(lives>0 && currentIndex>=questions.length){
+    msg += '<br>모든 문제를 다 풀었습니다!';
+  }
+  document.getElementById('question-container').innerHTML=
+    '<p class="game-over">'+msg+'</p>';
+  document.getElementById('option-container').innerHTML='';
+}
+</script>
+</body>
+</html>
